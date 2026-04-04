@@ -94,7 +94,7 @@ expense_tracker/
 ### Step 1 — Clone the repo
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/BishalRokaha/expense-tracker.git 
 cd expense_tracker
 ```
 
@@ -117,10 +117,6 @@ pip install -r requirements.txt
 ```
 
 ### Step 4 — Create your Supabase table
-
-1. Go to [supabase.com](https://supabase.com) and sign in.
-2. Create a new project.
-3. Open the **SQL Editor** and run the following:
 
 ```sql
 CREATE TABLE expenses (
