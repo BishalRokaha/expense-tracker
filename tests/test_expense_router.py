@@ -12,8 +12,8 @@ from app.features.expenses.service import ExpenseService
 from tests.test_expense_service import FakeExpenseRepository
 
 
-# Fixture: overriding the DI to use the fake repo@pytest.fixture
-
+# Fixture: overriding the DI to use the fake repo
+@pytest.fixture
 def client():
     fake_repo = FakeExpenseRepository()
     fake_service = ExpenseService(fake_repo)
