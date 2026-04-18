@@ -10,4 +10,5 @@ class Expense:
     amount: float
     category: str
     date: date
+    user_id: str 
     description: Optional[str] = None

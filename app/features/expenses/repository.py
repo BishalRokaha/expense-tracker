@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import date
 from typing import Optional, List
-import uuid
 
 from supabase import Client
 
@@ -11,47 +10,37 @@ from app.features.expenses.exceptions import ExpenseRepositoryError
 TABLE = "expenses"
 
 
-# Abstract interface 
 class AbstractExpenseRepository(ABC):
 
     @abstractmethod
-    def create(self, expense: Expense) -> Expense:
-        ...
+    def create(self, expense: Expense) -> Expense: ...
 
     @abstractmethod
-    def get_by_id(self, expense_id: str) -> Optional[Expense]:
-        ...
+    def get_by_id(self, expense_id: str) -> Optional[Expense]: ...
 
     @abstractmethod
     def list_expenses(
         self,
+        user_id: str,
         category: Optional[str] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         page: int = 1,
         page_size: int = 20,
-    ) -> tuple[List[Expense], int]:
-        """Returns (items, total_count)."""
-        ...
+    ) -> tuple[List[Expense], int]: ...
 
     @abstractmethod
-    def delete(self, expense_id: str) -> bool:
-        """Returns True if the row existed and was deleted, False otherwise."""
-        ...
+    def delete(self, expense_id: str) -> bool: ...
 
     @abstractmethod
-    def list_by_month(self, year: int, month: int) -> List[Expense]:
-        """Returns all expenses for the given month/year (used for summary)."""
-        ...
+    def list_by_month(self, year: int, month: int, user_id: str) -> List[Expense]: ...
 
 
-# Concrete Supabase implementation 
 class SupabaseExpenseRepository(AbstractExpenseRepository):
 
     def __init__(self, client: Client):
         self._client = client
 
-    # helpers 
     @staticmethod
     def _row_to_expense(row: dict) -> Expense:
         return Expense(
@@ -60,10 +49,10 @@ class SupabaseExpenseRepository(AbstractExpenseRepository):
             amount=float(row["amount"]),
             category=row["category"],
             date=date.fromisoformat(row["date"]),
+            user_id=row["user_id"],         # ← map user_id from DB row
             description=row.get("description"),
         )
 
-    # interface implementation 
     def create(self, expense: Expense) -> Expense:
         try:
             payload = {
@@ -73,6 +62,7 @@ class SupabaseExpenseRepository(AbstractExpenseRepository):
                 "category": expense.category,
                 "date": expense.date.isoformat(),
                 "description": expense.description,
+                "user_id": expense.user_id,  # ← store user_id in DB
             }
             response = self._client.table(TABLE).insert(payload).execute()
             return self._row_to_expense(response.data[0])
@@ -95,6 +85,7 @@ class SupabaseExpenseRepository(AbstractExpenseRepository):
 
     def list_expenses(
         self,
+        user_id: str,
         category: Optional[str] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
@@ -102,8 +93,11 @@ class SupabaseExpenseRepository(AbstractExpenseRepository):
         page_size: int = 20,
     ) -> tuple[List[Expense], int]:
         try:
-            query = self._client.table(TABLE).select("*", count="exact")
-
+            query = (
+                self._client.table(TABLE)
+                .select("*", count="exact")
+                .eq("user_id", user_id)     # ← only this user's rows
+            )
             if category:
                 query = query.eq("category", category)
             if start_date:
@@ -116,8 +110,7 @@ class SupabaseExpenseRepository(AbstractExpenseRepository):
 
             response = query.execute()
             items = [self._row_to_expense(row) for row in response.data]
-            total = response.count or 0
-            return items, total
+            return items, response.count or 0
         except Exception as exc:
             raise ExpenseRepositoryError(str(exc)) from exc
 
@@ -133,9 +126,8 @@ class SupabaseExpenseRepository(AbstractExpenseRepository):
         except Exception as exc:
             raise ExpenseRepositoryError(str(exc)) from exc
 
-    def list_by_month(self, year: int, month: int) -> List[Expense]:
+    def list_by_month(self, year: int, month: int, user_id: str) -> List[Expense]:
         try:
-            # Building first and last day of the month for filtering
             from calendar import monthrange
             _, last_day = monthrange(year, month)
             first = date(year, month, 1).isoformat()
@@ -144,6 +136,7 @@ class SupabaseExpenseRepository(AbstractExpenseRepository):
             response = (
                 self._client.table(TABLE)
                 .select("*")
+                .eq("user_id", user_id)     # ← only this user's rows
                 .gte("date", first)
                 .lte("date", last)
                 .execute()

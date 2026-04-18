@@ -1,6 +1,6 @@
 from collections import defaultdict
 from datetime import date
-from typing import Optional, List
+from typing import Optional
 import uuid
 
 from app.features.expenses.models import Expense
@@ -31,8 +31,7 @@ class ExpenseService:
     def __init__(self, repository: AbstractExpenseRepository):
         self._repo = repository
 
-    # Create 
-    def create_expense(self, data: ExpenseCreate) -> ExpenseResponse:
+    def create_expense(self, data: ExpenseCreate, user_id: str) -> ExpenseResponse:
         expense = Expense(
             id=str(uuid.uuid4()),
             title=data.title,
@@ -40,14 +39,14 @@ class ExpenseService:
             category=data.category,
             date=data.date,
             description=data.description,
+            user_id=user_id,        
         )
         created = self._repo.create(expense)
         return _expense_to_response(created)
 
-    # Read (list) 
-
     def list_expenses(
         self,
+        user_id: str,               
         category: Optional[str] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
@@ -55,6 +54,7 @@ class ExpenseService:
         page_size: int = 20,
     ) -> PaginatedExpenses:
         items, total = self._repo.list_expenses(
+            user_id=user_id,
             category=category,
             start_date=start_date,
             end_date=end_date,
@@ -68,24 +68,22 @@ class ExpenseService:
             page_size=page_size,
         )
 
-    # Read (single) 
-
-    def get_expense(self, expense_id: str) -> ExpenseResponse:
+    def get_expense(self, expense_id: str, user_id: str) -> ExpenseResponse:
         expense = self._repo.get_by_id(expense_id)
-        if expense is None:
+        # Check it exists AND belongs to this user
+        if expense is None or expense.user_id != user_id:
             raise ExpenseNotFoundError(expense_id)
         return _expense_to_response(expense)
 
-    # Delete 
-    def delete_expense(self, expense_id: str) -> None:
-        deleted = self._repo.delete(expense_id)
-        if not deleted:
+    def delete_expense(self, expense_id: str, user_id: str) -> None:
+        expense = self._repo.get_by_id(expense_id)
+        # Check it exists AND belongs to this user before deleting
+        if expense is None or expense.user_id != user_id:
             raise ExpenseNotFoundError(expense_id)
+        self._repo.delete(expense_id)
 
-    # Summary 
-    def get_summary(self, year: int, month: int) -> ExpenseSummary:
-        
-        expenses = self._repo.list_by_month(year=year, month=month)
+    def get_summary(self, year: int, month: int, user_id: str) -> ExpenseSummary:
+        expenses = self._repo.list_by_month(year=year, month=month, user_id=user_id)
 
         total_spending = 0.0
         category_totals: dict[str, float] = defaultdict(float)

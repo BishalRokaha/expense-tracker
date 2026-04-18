@@ -11,32 +11,33 @@ from app.features.expenses.schemas import (
 )
 from app.features.expenses.service import ExpenseService
 from app.features.expenses.exceptions import ExpenseNotFoundError
-from app.dependencies import get_expense_service
+from app.dependencies import get_expense_service, get_current_user
 
-router = APIRouter(prefix="/expenses", tags=["expenses"])
+router = APIRouter(
+    prefix="/expenses",
+    tags=["expenses"]
+    )
 
 
 # POST /expenses 
-
 @router.post("/", response_model=ExpenseResponse, status_code=status.HTTP_201_CREATED)
 def create_expense(
     payload: ExpenseCreate,
     service: ExpenseService = Depends(get_expense_service),
+    current_user: str = Depends(get_current_user),   # ← protected
 ):
-    """Create a new expense."""
-    return service.create_expense(payload)
+    return service.create_expense(payload, user_id=current_user)
 
 
-# GET /expenses/summary  
-
+# GET /expenses/summary 
 @router.get("/summary", response_model=ExpenseSummary)
 def get_summary(
-    month: int = Query(..., ge=1, le=12, description="Month number (1–12)"),
-    year: int = Query(..., ge=2000, le=2100, description="Four-digit year"),
+    month: int = Query(..., ge=1, le=12),
+    year: int = Query(..., ge=2000, le=2100),
     service: ExpenseService = Depends(get_expense_service),
+    current_user: str = Depends(get_current_user),   # ← protected
 ):
-    """Return total spending and category breakdown for a given month."""
-    return service.get_summary(year=year, month=month)
+    return service.get_summary(year=year, month=month, user_id=current_user)
 
 
 # GET /expenses 
@@ -48,14 +49,15 @@ def list_expenses(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     service: ExpenseService = Depends(get_expense_service),
+    current_user: str = Depends(get_current_user),   # ← protected
 ):
-    """List expenses with optional filters and pagination."""
     return service.list_expenses(
         category=category,
         start_date=start_date,
         end_date=end_date,
         page=page,
         page_size=page_size,
+        user_id=current_user,
     )
 
 
@@ -64,10 +66,10 @@ def list_expenses(
 def get_expense(
     expense_id: str,
     service: ExpenseService = Depends(get_expense_service),
+    current_user: str = Depends(get_current_user),   # ← protected
 ):
-    """Fetch a single expense by ID."""
     try:
-        return service.get_expense(expense_id)
+        return service.get_expense(expense_id, user_id=current_user)
     except ExpenseNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
@@ -77,9 +79,9 @@ def get_expense(
 def delete_expense(
     expense_id: str,
     service: ExpenseService = Depends(get_expense_service),
+    current_user: str = Depends(get_current_user),   # ← protected
 ):
-    """Delete an expense by ID."""
     try:
-        service.delete_expense(expense_id)
+        service.delete_expense(expense_id, user_id=current_user)
     except ExpenseNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
